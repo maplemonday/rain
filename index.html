@@ -477,8 +477,15 @@ and limitations under the License.
         canvas.height = rect.height;
 
         // ฟังก์ชันสำหรับสุ่มลิงก์รูปใหม่จาก picsum.photos
-        function getRandomImageUrl() {
-            return "https://picsum.photos/300/300?random=" + Math.random();
+        // function getRandomImageUrl() {
+        //     return "https://picsum.photos/300/300?random=" + Math.random();
+        // }
+
+        function getRandomImageUrl(category = "nature") {
+            const sources = [
+                () => 'https://picsum.photos/300/300?random=${Math.random()}',
+            ];
+            return sources[Math.floor(Math.random() * sources.length)]();
         }
 
         // ใช้รูปสุ่มทันทีตอนโหลดหน้า
@@ -626,5 +633,6 @@ and limitations under the License.
         });
     </script>
 </body>
+
 
 </html>
