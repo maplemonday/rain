@@ -1,231 +1,844 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rain</title>
-    <style>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rain</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
     body {
-        margin: 0;
-        background: #000;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-
     #root {
-        position: absolute;
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      top: 0;
+      left: 0;
     }
-
     #canvas {
-        width: 100%;
-        height: 100%;
+      width: 100%;
+      height: 100%;
+      transform-origin: 0 0;
     }
-
     #loading {
-        position: absolute;
-        z-index: -1;
-        font-family: 'Segoe UI', Roboto, Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 2em;
-        color: gray;
+      position: absolute;
+      z-index: 999;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
     }
-    </style>
-    <script src="./script.js"></script>
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      position: relative;
+    }
+    .spinner::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 2px solid #00fffc;
+      border-radius: 50%;
+      animation: neonRipple 2s ease-out infinite;
+      box-shadow: 0 0 10px #00fffc, inset 0 0 10px #00fffc;
+    }
+    @keyframes neonRipple {
+      0% { transform: scale(0.1); opacity: 1; filter: brightness(1); }
+      100% { transform: scale(1.8); opacity: 0; filter: brightness(2); }
+    }
+
+    /* Control Panel */
+    .control-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      border-radius: 15px;
+      padding: 20px;
+      color: white;
+      max-width: 350px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      transform: translateX(calc(100% - 40px));
+      opacity: 0;
+    }
+
+    .control-panel.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .control-panel::after {
+      content: '⚙️';
+      position: absolute;
+      left: -40px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 24px;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.3s ease;
+    }
+
+    .control-panel.show::after {
+      opacity: 0;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .slider {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #333;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4f46e5;
+      cursor: pointer;
+    }
+
+    .slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4f46e5;
+      cursor: pointer;
+      border: none;
+    }
+
+    .toggle-button {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-button:hover {
+      background: #4338ca;
+    }
+
+    .toggle-button.active {
+      background: #10b981;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 5px 0;
+      font-size: 24px;
+    }
+
+    .header p {
+      margin: 0;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .presets {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    .preset-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 0 2px #4f46e5;
+    }
+
+    .preset-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .preset-btn:active {
+      transform: scale(0.95);
+    }
+
+    #dropzone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: rgba(0,0,0,0.7);
+      z-index: 500;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #dropzone.active {
+      display: flex;
+    }
+
+    .drop-content {
+      padding: 30px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 15px;
+      border: 2px dashed white;
+      color: white;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        max-width: calc(100vw - 40px);
+        left: 20px;
+        right: 20px;
+        top: auto;
+        bottom: 20px;
+        transform: translateY(calc(100% - 40px));
+      }
+
+      .control-panel::after {
+        left: 50%;
+        top: -40px;
+        transform: translateX(-50%);
+      }
+
+      .control-panel:hover,
+      .control-panel:focus-within {
+        transform: translateY(0);
+      }
+
+      .header h1 {
+        font-size: 20px;
+      }
+
+      .presets {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
 </head>
-
 <body>
-    <div id="root">
-        <div id="bg-controls" style="position:absolute;top:10px;right:-50;z-index:10;display:flex;gap:8px;align-items:center;background:rgba(0, 0, 0, 0);border-radius:16px;">
-            <div style="position:relative; height: 28px;"> <!-- กำหนด height ที่นี่ -->
-                <input 
-                    id="bg-input" 
-                    type="url" 
-                    placeholder="Paste URL or drop image" 
-                    style="height: 100%; padding: 0 10px; border-radius:8px; border:1px; outline:none; min-width:220px; font-size:1rem; box-sizing: border-box;" 
-                />
-                <input 
-                    id="bg-file" 
-                    type="file" 
-                    accept="image/*" 
-                    style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" 
-                />
-            </div>
-
-            <button id="rain-btn" type="button" style="height: 28px; padding:0 16px; border-radius:8px; background:#62b1ff; color:#f8f8f8; font-weight:500; transition:background 0.2s; border:none; cursor:pointer;">Rain!</button> 
-        </div>
-        <canvas id="canvas"></canvas>
-        <p id="loading">Loading...</p>
+  <div id="root">
+    <div id="canvas-wrapper" style="position:absolute; top:0; left:0; width:100%; height:100%; overflow:hidden;">
+      <canvas id="canvas"></canvas>
     </div>
-    <script>
-        const canvas = document.querySelector("#canvas");
+    
+    <div id="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="dropzone">
+      <div class="drop-content">
+        <i class="fas fa-cloud-upload-alt" style="font-size: 48px; margin-bottom: 15px;"></i>
+        <br>Drop Image Here
+      </div>
+    </div>
+
+    <div class="control-panel" tabindex="0">
+      <div class="header">
+        <h1><i class="fas fa-tint"></i> Raindrop FX</h1>
+      </div>
+
+      <div class="control-group">
+        <button class="preset-btn" id="fullscreenBtn" style="width: 100%; grid-column: 1 / -1;">
+          <i class="fas fa-expand"></i> Enter Fullscreen
+        </button>
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>Rain Intensity</span>
+          <span id="dropletsPerSecondValue">1000</span>
+        </div>
+        <input type="range" min="100" max="3000" value="1000" class="slider" id="dropletsPerSecond">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>Rain Size</span>
+          <span id="spawnSizeValue">[30, 80]</span>
+        </div>
+        <input type="range" min="10" max="150" value="55" class="slider" id="spawnSize">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>Slip Rate</span>
+          <span id="slipRateValue">0.50</span>
+        </div>
+        <input type="range" min="0" max="100" value="50" class="slider" id="slipRate">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>Gravity</span>
+          <span id="gravityValue">2400</span>
+        </div>
+        <input type="range" min="1000" max="5000" value="2400" class="slider" id="gravity">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">
+          <span>Mist Effect</span>
+          <button id="mistToggle" class="toggle-button active">ON</button>
+        </div>
+      </div>
+
+      <div class="presets">
+        <button class="preset-btn" data-preset="light"><i class="fas fa-cloud-sun"></i> Light Rain</button>
+        <button class="preset-btn" data-preset="heavy"><i class="fas fa-cloud-rain"></i> Heavy Rain</button>
+        <button class="preset-btn" data-preset="storm"><i class="fas fa-bolt"></i> Storm</button>
+        <button class="preset-btn" data-preset="norain"><i class="fas fa-sun"></i> No Rain</button>
+        <button class="preset-btn" id="changeBgBtn"><i class="fas fa-random"></i> Random BG</button>
+        <button class="preset-btn" id="customBgBtn"><i class="fas fa-image"></i> Custom BG</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/gh/SardineFish/raindrop-fx@master/bundle/index.js"></script>
+  <script>
+    (async function() {
+      const canvas = document.querySelector("#canvas");
+      const loadingEl = document.getElementById("loading");
+      const dropzone = document.getElementById("dropzone");
+      const root = document.getElementById("root");
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+      let raindropFx = null;
+
+      // Zoom variables
+      let scale = 1;
+      const minScale = 0.5;
+      const maxScale = 5;
+
+      // Fullscreen function
+      async function enterFullscreen() {
+        try {
+          if (root.requestFullscreen) {
+            await root.requestFullscreen();
+          } else if (root.webkitRequestFullscreen) {
+            await root.webkitRequestFullscreen();
+          } else if (root.mozRequestFullScreen) {
+            await root.mozRequestFullScreen();
+          } else if (root.msRequestFullscreen) {
+            await root.msRequestFullscreen();
+          }
+          fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+        } catch (err) {
+          console.log('Fullscreen request failed:', err);
+        }
+      }
+
+      function exitFullscreen() {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
+        }
+        fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
+      }
+
+      // Fullscreen button click
+      fullscreenBtn.addEventListener('click', () => {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          exitFullscreen();
+        } else {
+          enterFullscreen();
+        }
+      });
+
+      // Listen for fullscreen changes
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
+        }
+      });
+
+      document.addEventListener('webkitfullscreenchange', () => {
+        if (!document.webkitFullscreenElement) {
+          fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
+        }
+      });
+
+      document.addEventListener('dragleave', handleDragLeave);
+
+      function resizeCanvas() {
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
-
-        // ฟังก์ชันสำหรับสุ่มลิงก์รูปใหม่จาก picsum.photos
-        // function getRandomImageUrl() {
-        //     return "https://picsum.photos/300/300?random=" + Math.random();
-        // }
-
-        function getRandomImageUrl(category = "nature") {
-            const sources = [
-                () => 'https://picsum.photos/300/300?random=${Math.random()}',
-            ];
-            return sources[Math.floor(Math.random() * sources.length)]();
+        if (raindropFx && typeof raindropFx.resize === "function") {
+          raindropFx.resize(rect.width, rect.height);
         }
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
 
-        // ใช้รูปสุ่มทันทีตอนโหลดหน้า
+      function getRandomImageUrl() {
+        // const width = Math.min(window.innerWidth, 1920);
+        // const height = Math.min(window.innerHeight, 1080);
+        return `https://picsum.photos/300/300?random=${Math.random()}`;
+      }
 
-        // dummy image (1x1 transparent PNG)
-        const DUMMY_IMAGE =
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAn8B9p6Q2wAAAABJRU5ErkJggg==';
+      async function loadImage(url) {
+        loadingEl.style.display = 'flex';
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            loadingEl.style.display = 'none';
+            resolve(img);
+          };
+          img.onerror = () => {
+            loadingEl.style.display = 'none';
+            reject(new Error("Image load failed"));
+          };
+          img.src = url;
+        });
+      }
 
-        async function loadImageOrDummy(url) {
-            return new Promise(resolve => {
-                const img = new window.Image();
-                img.onload = () => resolve(url);
-                img.onerror = () => resolve(DUMMY_IMAGE);
-                img.src = url;
-            });
-        }
-
-        (async function() {
-            let currentBg = getRandomImageUrl();
-            currentBg = await loadImageOrDummy(currentBg);
-            let raindropFx = new RaindropFX({
+      async function startWithRetry(url) {
+        const changeBgBtn = document.getElementById('changeBgBtn');
+        changeBgBtn.disabled = true;
+        
+        let attempt = 0;
+        while (true) {
+          attempt++;
+          const finalUrl = url || getRandomImageUrl();
+          try {
+            const img = await loadImage(finalUrl);
+            
+            if (raindropFx) {
+              await raindropFx.setBackground(img);
+            } else {
+              raindropFx = new RaindropFX({
                 canvas: canvas,
-                background: currentBg,
-            });
-            raindropFx.start();
-            window.raindropFx = raindropFx;
-            canvas.style.filter = "brightness(0.8) contrast(1.1) saturate(0.9)";
-        })();
-
-        // Modern floating controls
-        const bgInput = document.getElementById('bg-input');
-        const bgFileInput = document.getElementById('bg-file');
-        const bgControls = document.getElementById('bg-controls');
-        const rainBtn = document.getElementById('rain-btn');
-
-        // --- Auto hide controls on user activity ---
-        let hideTimeout;
-        let isHidden = false;
-        const HIDE_DELAY = 5000; // ms
-
-        function showControls() {
-            if (isHidden) {
-                bgControls.style.opacity = '1';
-                bgControls.style.pointerEvents = '';
-                isHidden = false;
+                background: img,
+                dropletsPerSecond: 1000,
+                spawnSize: [30, 80],
+                spawnInterval: [0.1, 0.2],
+                slipRate: 0.5,
+                motionInterval: [0.5, 1.0],
+                xShifting: [0.02, 0.08],
+                colliderSize: 0.9,
+                trailDropDensity: 0.2,
+                trailDropSize: [0.3, 0.5],
+                trailDistance: [30, 50],
+                trailSpread: 0.5,
+                initialSpread: 0.5,
+                shrinkRate: 0.015,
+                velocitySpread: 0.3,
+                evaporate: 20,
+                gravity: 2400,
+                backgroundBlurSteps: 3,
+                mist: true,
+                mistColor: [0.01, 0.01, 0.01, 1],
+                mistTime: 0.5,
+                mistBlurStep: 4,
+                dropletSize: [5, 20], // default [10, 30]
+                smoothRaindrop: [0.97, 1.0],
+                refractBase: 0.6, // default 0.4
+                refractScale: 0.8, // default 0.6
+                raindropCompose: "smoother",
+                raindropLightPos: [-1, 1, 2, 0],
+                raindropDiffuseLight: [0.3, 0.3, 0.3],
+                raindropShadowOffset: 0.7,
+                raindropEraserSize: [0.95, 1.0], // default [0.93, 1.0]
+                raindropSpecularLight: [0, 0, 0],
+                raindropSpecularShininess: 32,
+                raindropLightBump: 0.6
+              });
+              raindropFx.start();
+              setupControls();
             }
+            
+            scale = 1;
+            if (raindropFx.setScale) raindropFx.setScale(scale);
+            
+            changeBgBtn.disabled = false;
+            break;
+          } catch(err) {
+            console.warn(`Attempt #${attempt} failed:`, err);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
+      }
 
-        function hideControls() {
-            bgControls.style.opacity = '0';
-            bgControls.style.pointerEvents = 'none';
-            isHidden = true;
-        }
+      // Setup Controls
+      let hidePanelTimeout;
+      const controlPanel = document.querySelector('.control-panel');
 
-        function resetHideTimer() {
-            showControls();
-            clearTimeout(hideTimeout);
-            hideTimeout = setTimeout(hideControls, HIDE_DELAY);
-        }
+      function showPanel() {
+        controlPanel.classList.add('show');
+      }
 
-        // Listen for user activity
-        ['mousemove', 'touchstart', 'keydown', 'mousedown'].forEach(evt => {
-            window.addEventListener(evt, resetHideTimer, {passive:true});
+      function hidePanel() {
+        controlPanel.classList.remove('show');
+      }
+
+      function setupControls() {
+        // Panel visibility control - only show on hover/touch
+        controlPanel.addEventListener('mouseenter', showPanel);
+        controlPanel.addEventListener('mouseleave', hidePanel);
+
+        // Show panel when interacting with controls
+        const allControls = controlPanel.querySelectorAll('input, button');
+        allControls.forEach(control => {
+          control.addEventListener('focus', showPanel);
         });
 
-        // Start timer on load
-        resetHideTimer();
 
-        // Rain! button สุ่มรูปใหม่จาก picsum.photos ทุกครั้งที่กด
-        rainBtn.addEventListener('click', function() {
-            const randomBg = getRandomImageUrl();
-            setCustomBackground(randomBg, randomBg);
-            resetHideTimer(); // show controls if hidden
+        // Toggle panel when clicking gear icon or header
+        // Droplets per second
+        const dropletsSlider = document.getElementById('dropletsPerSecond');
+        const dropletsValue = document.getElementById('dropletsPerSecondValue');
+        
+        dropletsSlider.addEventListener('input', () => {
+          const value = parseInt(dropletsSlider.value);
+          dropletsValue.textContent = value;
+          raindropFx.options.dropletsPerSecond = value;
         });
 
-        // Handle URL input
-        bgInput.addEventListener('change', function() {
-            if (bgInput.value) {
-                setCustomBackground(bgInput.value, bgInput.value);
-            }
+        // Spawn size
+        const spawnSizeSlider = document.getElementById('spawnSize');
+        const spawnSizeValue = document.getElementById('spawnSizeValue');
+        
+        spawnSizeSlider.addEventListener('input', () => {
+          const value = parseInt(spawnSizeSlider.value);
+          const min = Math.max(10, value - 25);
+          const max = Math.min(200, value + 25);
+          spawnSizeValue.textContent = `[${min}, ${max}]`;
+          raindropFx.options.spawnSize = [min, max];
         });
 
-        // Handle file selection
-        bgFileInput.addEventListener('change', function() {
-            const file = bgFileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    setCustomBackground(e.target.result, file.name);
-                };
-                reader.readAsDataURL(file);
-            }
+        // Slip rate
+        const slipRateSlider = document.getElementById('slipRate');
+        const slipRateValue = document.getElementById('slipRateValue');
+        
+        slipRateSlider.addEventListener('input', () => {
+          const value = parseFloat(slipRateSlider.value) / 100;
+          slipRateValue.textContent = value.toFixed(2);
+          raindropFx.options.slipRate = value;
         });
 
-        // Drag & drop support for url or file
-        function handleDrop(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            // Clear input
-            bgInput.value = '';
-            bgFileInput.value = '';
-            // File dropped
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                const file = e.dataTransfer.files[0];
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        setCustomBackground(ev.target.result, file.name);
-                    };
-                    reader.readAsDataURL(file);
-                }
-                return;
-            }
-            // URL dropped
-            const url = e.dataTransfer.getData('URL') || e.dataTransfer.getData('text/plain');
-            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-                bgInput.value = url;
-                setCustomBackground(url, url);
-            }
+        // Gravity
+        const gravitySlider = document.getElementById('gravity');
+        const gravityValue = document.getElementById('gravityValue');
+        
+        gravitySlider.addEventListener('input', () => {
+          const value = parseInt(gravitySlider.value);
+          gravityValue.textContent = value;
+          raindropFx.options.gravity = value;
+        });
+
+        // Mist toggle
+        const mistToggle = document.getElementById('mistToggle');
+        
+        function updateMistToggle() {
+          if (!raindropFx) return;
+          const mistToggle = document.getElementById('mistToggle');
+          mistToggle.classList.toggle('active', raindropFx.options.mist);
+          mistToggle.textContent = raindropFx.options.mist ? 'ON' : 'OFF';
         }
 
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        // Attach to canvas and controls
-        [canvas, bgControls].forEach(el => {
-            el.addEventListener('dragover', handleDragOver);
-            el.addEventListener('drop', handleDrop);
+        mistToggle.addEventListener('click', () => {
+          raindropFx.options.mist = !raindropFx.options.mist;
+          if (raindropFx.options.mist) {
+            // Reset mist settings when turning on
+            raindropFx.options.mistColor = [0.02, 0.02, 0.02, 0.8];
+            raindropFx.options.mistTime = 0.5;
+            raindropFx.options.mistBlurStep = 4;
+          }
+          updateMistToggle();
         });
 
-        function setCustomBackground(bg, label) {
-            raindropFx.setBackground(bg);
-            if (label) {
-                bgInput.value = label;
-            }
-        }
+        // Initialize toggle state
+        updateMistToggle();
 
-        // Clicking the input field opens file dialog if empty
-        bgInput.addEventListener('click', function() {
-            if (!bgInput.value) {
-                bgFileInput.click();
-            }
+        // Presets
+        document.querySelectorAll('.preset-btn').forEach(button => {
+          const preset = button.dataset.preset;
+          if (preset) {
+            button.addEventListener('click', () => applyPreset(preset));
+          }
         });
-    </script>
+      }   
+
+      let currentPreset = null;
+      
+      function applyPreset(preset) {
+        currentPreset = preset;
+        // Update active state of buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.preset === preset);
+        });
+        switch(preset) {
+          case 'light':
+            raindropFx.options.dropletsPerSecond = 300;
+            raindropFx.options.spawnSize = [15, 40];
+            raindropFx.options.slipRate = 0.3;
+            raindropFx.options.gravity = 2000;
+            break;
+          case 'heavy':
+            raindropFx.options.dropletsPerSecond = 1500;
+            raindropFx.options.spawnSize = [50, 100];
+            raindropFx.options.slipRate = 0.7;
+            raindropFx.options.gravity = 2800;
+            break;
+          case 'storm':
+            raindropFx.options.dropletsPerSecond = 2500;
+            raindropFx.options.spawnSize = [60, 150];
+            raindropFx.options.slipRate = 0.9;
+            raindropFx.options.gravity = 3500;
+            break;
+          case 'norain':
+            // Immediately set rain to zero
+            document.getElementById('dropletsPerSecond').value = 0;
+            document.getElementById('dropletsPerSecondValue').textContent = '0';
+            raindropFx.options.dropletsPerSecond = 0;
+            
+            document.getElementById('spawnSize').value = 10;
+            document.getElementById('spawnSizeValue').textContent = '[0, 0]';
+            raindropFx.options.spawnSize = [0, 0];
+            currentPreset = 'norain';
+            break;
+        }
+        updateSliderValues();
+      }
+ 
+      function updateSliderValues() {
+        if (!raindropFx) return;
+        
+        document.getElementById('dropletsPerSecond').value = raindropFx.options.dropletsPerSecond;
+        document.getElementById('dropletsPerSecondValue').textContent = raindropFx.options.dropletsPerSecond;
+        
+        const spawnSize = raindropFx.options.spawnSize;
+        const spawnSizeAvg = Math.round((spawnSize[0] + spawnSize[1]) / 2);
+        document.getElementById('spawnSize').value = spawnSizeAvg;
+        document.getElementById('spawnSizeValue').textContent = `[${spawnSize[0]}, ${spawnSize[1]}]`;
+        
+        document.getElementById('slipRate').value = raindropFx.options.slipRate * 100;
+        document.getElementById('slipRateValue').textContent = raindropFx.options.slipRate.toFixed(2);
+        
+        document.getElementById('gravity').value = raindropFx.options.gravity;
+        document.getElementById('gravityValue').textContent = raindropFx.options.gravity;
+        
+        // Force update mist toggle
+        const mistToggle = document.getElementById('mistToggle');
+        mistToggle.classList.toggle('active', raindropFx.options.mist);
+        mistToggle.textContent = raindropFx.options.mist ? 'ON' : 'OFF';
+      }
+
+      // Change background button
+      document.getElementById('changeBgBtn').addEventListener('click', () => {
+        loadingEl.style.display = 'flex';
+        startWithRetry();
+      });
+
+      // Custom background button
+      const bgFileInput = document.createElement('input');
+      bgFileInput.type = 'file';
+      bgFileInput.accept = 'image/*';
+      bgFileInput.style.display = 'none';
+      document.body.appendChild(bgFileInput);
+
+      document.getElementById('customBgBtn').addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering canvas click
+        bgFileInput.click();
+      });
+
+      bgFileInput.addEventListener('change', function(e) {
+        e.stopPropagation();
+        const file = bgFileInput.files[0];
+        if(file){
+          const reader = new FileReader();
+          reader.onload = function(e){
+            startWithRetry(e.target.result);
+          }
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Start first time
+      await startWithRetry();
+      // Set initial preset to light rain
+      applyPreset('light');
+      // Panel starts hidden by default
+
+      // Zoom with wheel
+      let lastTouchDist = null;
+
+      canvas.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.001;
+        scale *= (1 + delta);
+        scale = Math.min(Math.max(scale, minScale), maxScale);
+
+        if (raindropFx && typeof raindropFx.setScale === 'function') {
+          raindropFx.setScale(scale);
+        }
+      }, { passive: false });
+
+      // Pinch zoom for mobile
+      canvas.addEventListener('touchmove', function(e) {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (lastTouchDist) {
+            const delta = dist / lastTouchDist;
+            scale *= delta;
+            scale = Math.min(Math.max(scale, minScale), maxScale);
+
+            if (raindropFx && typeof raindropFx.setScale === 'function') {
+              raindropFx.setScale(scale);
+            }
+          }
+          lastTouchDist = dist;
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', function(e){
+        if(e.touches.length < 2) lastTouchDist = null;
+      });
+
+      // Long-press for file picker
+      let pressTimer;
+      canvas.addEventListener('touchstart', (e) => {
+        if(e.touches.length === 1){
+          pressTimer = setTimeout(() => {
+            bgFileInput.click();
+          }, 600);
+        }
+      });
+
+      canvas.addEventListener('touchend', (e) => {
+        clearTimeout(pressTimer);
+      });
+
+      canvas.addEventListener('touchmove', (e) => {
+        clearTimeout(pressTimer);
+      });
+
+      // Single tap -> random image and hide panel
+      canvas.addEventListener('click', (e) => {
+        if (!pressTimer && !lastTouchDist && e.target === canvas) {
+          startWithRetry();
+        }
+      });
+
+
+      // Drag & Drop
+      function handleDrop(e){
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('active');
+        
+        if(e.dataTransfer.files && e.dataTransfer.files.length > 0){
+          const file = e.dataTransfer.files[0];
+          if(file.type.startsWith('image/')){
+            const reader = new FileReader();
+            reader.onload = ev => startWithRetry(ev.target.result);
+            reader.readAsDataURL(file);
+          }
+          return;
+        }
+        const url = e.dataTransfer.getData('URL') || e.dataTransfer.getData('text/plain');
+        if(url && (url.startsWith('http://') || url.startsWith('https://'))){
+          startWithRetry(url);
+        }
+      }
+
+      function handleDragOver(e){
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('active');
+      }
+
+      function handleDragLeave(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target === dropzone) {
+          dropzone.classList.remove('active');
+        }
+      }
+
+      document.addEventListener('dragover', handleDragOver);
+      document.addEventListener('drop', handleDrop);
+      document.addEventListener('dragleave', handleDragLeave);
+    })();
+
+          function requestFullscreen() {
+        const root = document.getElementById('root');
+        if (root.requestFullscreen) {
+          root.requestFullscreen().catch(err => console.log('Fullscreen request failed:', err));
+        } else if (root.webkitRequestFullscreen) {
+          root.webkitRequestFullscreen();
+        } else if (root.webkitEnterFullscreen) {
+          root.webkitEnterFullscreen();
+        }
+      }
+
+      // Request fullscreen on first interaction for mobile
+      function enableFullscreenOnMobile() {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+          canvas.addEventListener('click', requestFullscreen, { once: true });
+          document.addEventListener('touchstart', requestFullscreen, { once: true });
+        }
+      }
+
+      enableFullscreenOnMobile();
+
+  </script>
 </body>
-
-
 </html>
-
-
-
