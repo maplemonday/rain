@@ -372,7 +372,7 @@
       </div>
 
       <div class="control-group">
-        <button class="preset-btn" id="fullscreenBtn" style="width: 100%; grid-column: 1 / -1; margin-bottom: 5px;">
+        <button class="preset-btn" id="fullscreenBtn" style="width: 100%; grid-column: 1 / -1; margin-bottom: 10px;">
           <i class="fas fa-expand"></i> Enter Fullscreen
         </button>
       </div>
@@ -1103,6 +1103,10 @@
         
         console.log('Loading video from URL:', url);
         loadingEl.style.display = 'flex';
+        
+        // Stop and reset the current video before loading new one
+        videoElement.pause();
+        videoElement.currentTime = 0;
         
         // Clear any previous event handlers
         videoElement.onloadedmetadata = null;
