@@ -912,26 +912,8 @@
           // Check if video is ready to be drawn
           if (videoElement.readyState === videoElement.HAVE_FUTURE_DATA || videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
             try {
-              // Fit video to canvas while maintaining aspect ratio
-              const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-              const canvasAspect = videoCanvas.width / videoCanvas.height;
-              
-              let drawWidth, drawHeight, dx, dy;
-              if (videoAspect > canvasAspect) {
-                // Video is wider, fit to width
-                drawWidth = videoCanvas.width;
-                drawHeight = videoCanvas.width / videoAspect;
-                dx = 0;
-                dy = (videoCanvas.height - drawHeight) / 2;
-              } else {
-                // Video is taller, fit to height
-                drawHeight = videoCanvas.height;
-                drawWidth = videoCanvas.height * videoAspect;
-                dx = (videoCanvas.width - drawWidth) / 2;
-                dy = 0;
-              }
-              
-              videoCanvasCtx.drawImage(videoElement, dx, dy, drawWidth, drawHeight);
+              // Stretch video to fill the entire canvas
+              videoCanvasCtx.drawImage(videoElement, 0, 0, videoCanvas.width, videoCanvas.height);
               if (raindropFx && typeof raindropFx.setBackground === 'function') {
                 raindropFx.setBackground(videoCanvas);
               }
@@ -1114,9 +1096,13 @@
         console.log('Loading video from URL:', url);
         loadingEl.style.display = 'flex';
         
-        // Stop and reset the current video before loading new one
+        // Clear previous video and canvas
         videoElement.pause();
         videoElement.currentTime = 0;
+        videoElement.src = ''; // Clear the source to free memory
+        if (videoCanvasCtx) {
+          videoCanvasCtx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+        }
         
         // Clear any previous event handlers
         videoElement.onloadedmetadata = null;
