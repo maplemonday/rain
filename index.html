@@ -482,6 +482,25 @@
         'https://videos.pexels.com/video-files/32221425/13742369_1080_1920_30fps.mp4'
       ];
 
+      let dynamicVideos = [...curatedVideos]; // เริ่มต้นด้วยค่าเดิม
+
+      // ดึง links จาก GitHub
+      async function loadVideosFromGithub() {
+        try {
+          const response = await fetch('https://raw.githubusercontent.com/maplemonday/rain/refs/heads/main/vid_for_rain.txt');
+          const text = await response.text();
+          // แยก lines และกรอง empty lines
+          const videos = text.split('\n').filter(line => line.trim().length > 0);
+          if (videos.length > 0) {
+            dynamicVideos = videos;
+            console.log('Loaded videos from GitHub:', dynamicVideos.length);
+          }
+        } catch(err) {
+          console.error('Failed to load videos from GitHub:', err);
+          // ใช้ค่าเดิมถ้า fetch ล้มเหลว
+        }
+      }
+
       // Fullscreen function
       async function enterFullscreen() {
         try {
@@ -1131,7 +1150,7 @@
 
       // Random Video button
       document.getElementById('randomVideoBtn').addEventListener('click', () => {
-        const randomVideoUrl = curatedVideos[Math.floor(Math.random() * curatedVideos.length)];
+        const randomVideoUrl = dynamicVideos[Math.floor(Math.random() * dynamicVideos.length)];
         loadVideoFromUrl(randomVideoUrl);
       });
 
@@ -1149,6 +1168,9 @@
       // Set initial preset to light rain
       applyPreset('heavy');
       // Panel starts hidden by default
+      
+      // โหลด videos จาก GitHub
+      loadVideosFromGithub();
 
       // Zoom with wheel
       let lastTouchDist = null;
