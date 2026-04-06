@@ -224,40 +224,10 @@
       cursor: pointer;
     }
 
-    #mistToggle, #videoToggle {
+    #mistToggle {
       min-width: 60px;
       text-align: center;
       white-space: nowrap;
-    }
-
-    #soundToggle {
-      min-width: 60px;
-      height: 30px;
-      padding: 0 !important;
-      display: flex !important;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-
-    #soundToggle.active {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    #soundToggle i {
-      pointer-events: none;
-    }
-
-    #videoPlayPause {
-      min-width: 60px;
-      height: 30px;
-      padding: 0 !important;
-      display: flex !important;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      flex-shrink: 0;
     }
 
     #videoUrlInput {
@@ -272,10 +242,6 @@
       outline: none;
       background: rgba(255, 255, 255, 0.15);
       box-shadow: 0 0 0 1px #cacaca;
-    }
-
-    #videoUrlGroup {
-      display: none;
     }
 
     @keyframes shake {
@@ -372,7 +338,7 @@
       </div>
 
       <div class="control-group">
-        <button class="preset-btn" id="fullscreenBtn" style="width: 100%; grid-column: 1 / -1; margin-bottom: 5px;">
+        <button class="preset-btn" id="fullscreenBtn" style="width: 100%; grid-column: 1 / -1; margin-bottom: 10px;">
           <i class="fas fa-expand"></i> Enter Fullscreen
         </button>
       </div>
@@ -417,41 +383,33 @@
       </div>
 
       <div class="control-group">
-        <div class="control-label">
-          <span>Video</span>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="soundToggle" class="toggle-button icon-toggle" title="Muted">
-              <i class="fas fa-volume-mute"></i>
+        <div class="control-label" style="gap: 8px;">
+          <span>Video Control</span>
+            <button id="videoPlayPauseBtn" class="toggle-button" style="width: 60px; min-width: 60px;" title="Play/Pause video">
+                <i class="fas fa-play"></i>
             </button>
-            <button id="videoPlayPause" class="toggle-button" style="min-width: 60px; padding: 0; display: none;" disabled>
-              <i class="fas fa-play"></i>
-            </button>
-            <button id="videoToggle" class="toggle-button">OFF</button>
-          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-label" style="gap: 8px;">
+          <span>URL</span>
+          <input 
+            type="text" 
+            id="videoUrlInput" 
+            placeholder="Paste video URL..."
+            value="https://www.shutterstock.com/shutterstock/videos/4018923955/preview/stock-footage-green-landscape-view-of-trees-in-forest.webm"
+            style="flex: 1; height: 22px;padding: 6px 10px; border-radius: 20px; border: none; background: rgba(255,255,255,0.1); color: white; font-size: 12px;"
+          >
+          <button id="videoLoadBtn" class="toggle-button" style="min-width: 60px;" title="Load video">
+            <i class="fas fa-download"></i> 
+          </button>
         </div>
       </div>
 
       <div class="control-group" id="videoControls" style="display: none;"></div>
 
       <div class="control-group" id="videoProgressGroup" style="display: none;"></div>
-
-      <div class="control-group" id="videoUrlGroup" style="display: none;">
-        <div class="control-label">
-          <span>Video URL</span>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <input 
-            type="text" 
-            id="videoUrlInput" 
-            value="https://www.shutterstock.com/shutterstock/videos/4018923955/preview/stock-footage-green-landscape-view-of-trees-in-forest.webm"
-            placeholder="https://example.com/video.webm" 
-            style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #444; background: rgba(255,255,255,0.1); color: white; font-size: 12px;"
-          >
-          <button id="videoUrlLoadBtn" class="toggle-button" style="padding: 8px 12px; white-space: nowrap;">
-            <i class="fas fa-link"></i> Load
-          </button>
-        </div>
-      </div>
 
       <div class="presets">
         <button class="preset-btn" data-preset="light"><i class="fas fa-cloud-sun"></i> Light Rain</button>
@@ -475,6 +433,51 @@
       const root = document.getElementById("root");
       const fullscreenBtn = document.getElementById("fullscreenBtn");
       let raindropFx = null;
+
+      // Cleanup tracking
+      let currentAnimationFrameId = null;
+      const eventListeners = new Map();
+
+      // Helper function to add and track event listeners
+      function addTrackedListener(element, event, handler, options) {
+        if (!eventListeners.has(element)) {
+          eventListeners.set(element, []);
+        }
+        element.addEventListener(event, handler, options);
+        eventListeners.get(element).push({ event, handler, options });
+      }
+
+      // Cleanup all event listeners
+      function cleanupEventListeners() {
+        for (const [element, listeners] of eventListeners) {
+          listeners.forEach(({ event, handler, options }) => {
+            element.removeEventListener(event, handler, options);
+          });
+        }
+        eventListeners.clear();
+      }
+
+      // Cleanup animation frame
+      function cancelAnimationFrame() {
+        if (currentAnimationFrameId) {
+          window.cancelAnimationFrame(currentAnimationFrameId);
+          currentAnimationFrameId = null;
+        }
+      }
+
+      // Cleanup video resources
+      function cleanupVideoResources() {
+        const videoElement = document.getElementById('backgroundVideo');
+        if (videoElement) {
+          videoElement.pause();
+          videoElement.src = '';
+          videoElement.onloadedmetadata = null;
+          videoElement.onerror = null;
+          videoElement.onplay = null;
+          videoElement.onpause = null;
+          videoElement.onended = null;
+        }
+      }
 
       // Zoom variables
       let scale = 1;
@@ -541,7 +544,7 @@
       }
 
       // Fullscreen button click
-      fullscreenBtn.addEventListener('click', () => {
+      addTrackedListener(fullscreenBtn, 'click', () => {
         if (document.fullscreenElement || document.webkitFullscreenElement) {
           exitFullscreen();
         } else {
@@ -550,19 +553,27 @@
       });
 
       // Listen for fullscreen changes
-      document.addEventListener('fullscreenchange', () => {
+      addTrackedListener(document, 'fullscreenchange', () => {
         if (!document.fullscreenElement) {
           fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
         }
       });
 
-      document.addEventListener('webkitfullscreenchange', () => {
+      addTrackedListener(document, 'webkitfullscreenchange', () => {
         if (!document.webkitFullscreenElement) {
           fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
         }
       });
 
-      document.addEventListener('dragleave', handleDragLeave);
+      function handleDragLeave(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target === dropzone) {
+          dropzone.classList.remove('active');
+        }
+      }
+
+      addTrackedListener(document, 'dragleave', handleDragLeave);
 
       function resizeCanvas() {
         const rect = canvas.getBoundingClientRect();
@@ -572,7 +583,7 @@
           raindropFx.resize(rect.width, rect.height);
         }
       }
-      window.addEventListener("resize", resizeCanvas);
+      addTrackedListener(window, "resize", resizeCanvas);
       resizeCanvas();
 
       function getRandomImageUrl() {
@@ -679,22 +690,23 @@
 
       function setupControls() {
         // Panel visibility control - only show on hover/touch
-        controlPanel.addEventListener('mouseenter', showPanel);
-        controlPanel.addEventListener('mouseleave', hidePanel);
+        addTrackedListener(controlPanel, 'mouseenter', showPanel);
+        addTrackedListener(controlPanel, 'mouseleave', hidePanel);
 
         // Show panel when interacting with controls
         const allControls = controlPanel.querySelectorAll('input, button');
         allControls.forEach(control => {
-          control.addEventListener('focus', showPanel);
+          addTrackedListener(control, 'focus', showPanel);
         });
 
 
         // Toggle panel when clicking gear icon or header
         // Droplets per second
+        // Droplets per second
         const dropletsSlider = document.getElementById('dropletsPerSecond');
         const dropletsValue = document.getElementById('dropletsPerSecondValue');
         
-        dropletsSlider.addEventListener('input', () => {
+        addTrackedListener(dropletsSlider, 'input', () => {
           const value = parseInt(dropletsSlider.value);
           dropletsValue.textContent = value;
           raindropFx.options.dropletsPerSecond = value;
@@ -704,7 +716,7 @@
         const spawnSizeSlider = document.getElementById('spawnSize');
         const spawnSizeValue = document.getElementById('spawnSizeValue');
         
-        spawnSizeSlider.addEventListener('input', () => {
+        addTrackedListener(spawnSizeSlider, 'input', () => {
           const value = parseInt(spawnSizeSlider.value);
           const min = Math.max(10, value - 25);
           const max = Math.min(200, value + 25);
@@ -716,7 +728,7 @@
         const slipRateSlider = document.getElementById('slipRate');
         const slipRateValue = document.getElementById('slipRateValue');
         
-        slipRateSlider.addEventListener('input', () => {
+        addTrackedListener(slipRateSlider, 'input', () => {
           const value = parseFloat(slipRateSlider.value) / 100;
           slipRateValue.textContent = value.toFixed(2);
           raindropFx.options.slipRate = value;
@@ -726,7 +738,7 @@
         const gravitySlider = document.getElementById('gravity');
         const gravityValue = document.getElementById('gravityValue');
         
-        gravitySlider.addEventListener('input', () => {
+        addTrackedListener(gravitySlider, 'input', () => {
           const value = parseInt(gravitySlider.value);
           gravityValue.textContent = value;
           raindropFx.options.gravity = value;
@@ -742,7 +754,7 @@
           mistToggle.textContent = raindropFx.options.mist ? 'ON' : 'OFF';
         }
 
-        mistToggle.addEventListener('click', () => {
+        addTrackedListener(mistToggle, 'click', () => {
           raindropFx.options.mist = !raindropFx.options.mist;
           if (raindropFx.options.mist) {
             // Reset mist settings when turning on
@@ -756,43 +768,11 @@
         // Initialize toggle state
         updateMistToggle();
 
-        // Sound toggle
-        const soundToggle = document.getElementById('soundToggle');
-        let isSoundMuted = true; // Default is muted
-        
-        function updateSoundToggle() {
-          const icon = soundToggle.querySelector('i');
-          if (isSoundMuted) {
-            soundToggle.classList.remove('active');
-            icon.className = 'fas fa-volume-mute';
-            soundToggle.title = 'Muted';
-          } else {
-            soundToggle.classList.add('active');
-            icon.className = 'fas fa-volume-up';
-            soundToggle.title = 'Sound On';
-          }
-          // Actually mute/unmute the video element
-          videoElement.muted = isSoundMuted;
-          localStorage.setItem('soundMuted', isSoundMuted);
-        }
-        
-        // Load sound state from localStorage
-        const savedSoundState = localStorage.getItem('soundMuted');
-        if (savedSoundState !== null) {
-          isSoundMuted = savedSoundState === 'true';
-        }
-        updateSoundToggle();
-        
-        soundToggle.addEventListener('click', () => {
-          isSoundMuted = !isSoundMuted;
-          updateSoundToggle();
-        });
-
         // Presets
         document.querySelectorAll('.preset-btn').forEach(button => {
           const preset = button.dataset.preset;
           if (preset) {
-            button.addEventListener('click', () => applyPreset(preset));
+            addTrackedListener(button, 'click', () => applyPreset(preset));
           }
         });
       }   
@@ -863,7 +843,7 @@
       }
 
       // Change background button
-      document.getElementById('changeBgBtn').addEventListener('click', () => {
+      addTrackedListener(document.getElementById('changeBgBtn'), 'click', () => {
         loadingEl.style.display = 'flex';
         startWithRetry();
       });
@@ -875,12 +855,12 @@
       bgFileInput.style.display = 'none';
       document.body.appendChild(bgFileInput);
 
-      document.getElementById('customBgBtn').addEventListener('click', (e) => {
+      addTrackedListener(document.getElementById('customBgBtn'), 'click', (e) => {
         e.stopPropagation(); // Prevent triggering canvas click
         bgFileInput.click();
       });
 
-      bgFileInput.addEventListener('change', function(e) {
+      addTrackedListener(bgFileInput, 'change', function(e) {
         e.stopPropagation();
         const file = bgFileInput.files[0];
         if(file){
@@ -892,13 +872,7 @@
         }
       });
 
-      // Video file input
-      const videoFileInput = document.createElement('input');
-      videoFileInput.type = 'file';
-      videoFileInput.accept = 'video/*';
-      videoFileInput.style.display = 'none';
-      document.body.appendChild(videoFileInput);
-
+      // Video element setup
       const videoElement = document.getElementById('backgroundVideo');
       let isVideoMode = false;
       let videoCanvas = null;
@@ -930,20 +904,15 @@
           }
         }
         if (isVideoMode) {
-          requestAnimationFrame(updateVideoFrame);
+          currentAnimationFrameId = requestAnimationFrame(updateVideoFrame);
+        } else {
+          currentAnimationFrameId = null;
         }
       }
 
       function enableVideoMode() {
         isVideoMode = true;
         document.getElementById('dropzoneText').textContent = 'Drop Video Here';
-        document.getElementById('videoToggle').classList.add('active');
-        document.getElementById('videoToggle').textContent = 'ON';
-        document.getElementById('videoPlayPause').style.display = 'flex';
-        document.getElementById('videoPlayPause').disabled = false;
-        document.getElementById('videoPlayPause').innerHTML = '<i class="fas fa-pause"></i>';
-        document.getElementById('videoPlayPause').title = 'Paused';
-        document.getElementById('videoUrlGroup').style.display = 'block';
         updateVideoFrame();
       }
 
@@ -951,140 +920,16 @@
         isVideoMode = false;
         videoElement.pause();
         document.getElementById('dropzoneText').textContent = 'Drop Image Here';
-        document.getElementById('videoToggle').classList.remove('active');
-        document.getElementById('videoToggle').textContent = 'OFF';
-        document.getElementById('videoPlayPause').style.display = 'none';
-        document.getElementById('videoPlayPause').disabled = true;
-        document.getElementById('videoUrlGroup').style.display = 'none';
       }
-
-      document.getElementById('videoToggle').addEventListener('click', () => {
-        if (isVideoMode) {
-          disableVideoMode();
-        } else if (videoElement.src) {
-          enableVideoMode();
-        } else {
-          // No video loaded yet - show URL input to load one
-          document.getElementById('videoUrlGroup').style.display = 'block';
-          showPanel(); // Show control panel
-        }
-      });
-
-      document.getElementById('videoUploadBtn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        videoFileInput.click();
-      });
-
-      videoFileInput.addEventListener('change', function(e) {
-        e.stopPropagation();
-        const file = videoFileInput.files[0];
-        if(file){
-          console.log('Loading video file:', file.name);
-          const reader = new FileReader();
-          
-          reader.onerror = function() {
-            loadingEl.style.display = 'none';
-            alert('Failed to read video file');
-            console.error('FileReader error');
-          };
-          
-          reader.onload = function(readerEvent){
-            loadingEl.style.display = 'flex';
-            console.log('FileReader complete, setting video src');
-            
-            // Clear any previous event handlers
-            videoElement.onloadedmetadata = null;
-            videoElement.onerror = null;
-            
-            videoElement.onloadedmetadata = function() {
-              console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-              // Update video canvas size to match video
-              if (videoCanvas) {
-                videoCanvas.width = videoElement.videoWidth;
-                videoCanvas.height = videoElement.videoHeight;
-                console.log('Canvas resized to:', videoCanvas.width, 'x', videoCanvas.height);
-              }
-              
-              loadingEl.style.display = 'none';
-              initVideoCanvas();
-              enableVideoMode();
-              console.log('Starting video playback');
-              videoElement.play().catch(err => console.error('Video autoplay prevented:', err));
-            };
-            
-            videoElement.onerror = function(err) {
-              loadingEl.style.display = 'none';
-              console.error('Video error:', err, videoElement.error);
-              alert('Failed to load video file: ' + (videoElement.error ? videoElement.error.message : 'Unknown error'));
-            };
-            
-            videoElement.src = readerEvent.target.result;
-            console.log('Video src set, calling load()');
-            videoElement.load();
-          };
-          
-          reader.readAsDataURL(file);
-        }
-      });
 
       // Function to update play/pause button based on video state
       function updatePlayPauseButton() {
-        const btn = document.getElementById('videoPlayPause');
-        // Stateful approach: show current state
-        if (videoElement.paused) {
-          btn.innerHTML = '<i class="fas fa-pause"></i>';
-          btn.title = 'Paused';
-        } else {
-          btn.innerHTML = '<i class="fas fa-play"></i>';
-          btn.title = 'Playing';
-        }
+        // No longer needed
       }
 
-      // Video playback controls
-      document.getElementById('videoPlayPause').addEventListener('click', () => {
-        // Only work if video mode is enabled
-        if (!isVideoMode) {
-          console.warn('Video mode is not enabled');
-          return;
-        }
-        
-        if (videoElement.paused) {
-          videoElement.play().catch(err => console.log('Play error:', err));
-        } else {
-          videoElement.pause();
-        }
-      });
+      // Video playback controls - Removed (not needed anymore)
 
-      // Update button when video play state changes
-      videoElement.addEventListener('play', updatePlayPauseButton);
-      videoElement.addEventListener('pause', updatePlayPauseButton);
-
-      // Video progress control - Only add if element exists
-      const videoProgressEl = document.getElementById('videoProgress');
-      if (videoProgressEl) {
-        videoProgressEl.addEventListener('input', function(e) {
-          if (videoElement && videoElement.duration) {
-            videoElement.currentTime = (parseFloat(e.target.value) / 100) * videoElement.duration;
-          }
-        });
-      }
-
-      // Update progress bar as video plays
-      videoElement.addEventListener('timeupdate', () => {
-        if (videoElement.duration) {
-          const progress = (videoElement.currentTime / videoElement.duration) * 100;
-          const videoProgressEl = document.getElementById('videoProgress');
-          if (videoProgressEl) {
-            videoProgressEl.value = progress;
-          }
-        }
-      });
-
-      // Handle video end
-      videoElement.addEventListener('ended', () => {
-        videoElement.currentTime = 0;
-        videoElement.play().catch(err => console.log('Autoplay error:', err));
-      });
+      // Video progress control - Removed (not needed anymore)
 
       // Video URL loading
       function triggerShakeAnimation() {
@@ -1123,9 +968,16 @@
           }
           loadingEl.style.display = 'none';
           initVideoCanvas();
-          enableVideoMode();
+          isVideoMode = true;
+          
+          // Permanently mute video
+          videoElement.muted = true;
+          videoElement.volume = 0;
+          videoElement.loop = true;
+          
           console.log('Starting video playback from URL');
           videoElement.play().catch(err => console.error('Video autoplay prevented:', err));
+          updateVideoFrame();
         };
 
         videoElement.onerror = function() {
@@ -1141,13 +993,45 @@
         videoElement.load();
       }
 
-      document.getElementById('videoUrlLoadBtn').addEventListener('click', () => {
+      // Play button - load video from URL
+      const videoLoadBtn = document.getElementById('videoLoadBtn');
+      addTrackedListener(videoLoadBtn, 'click', () => {
         const url = document.getElementById('videoUrlInput').value.trim();
         loadVideoFromUrl(url);
       });
 
+      // Play/Pause button - toggle video playback
+      const videoPlayPauseBtn = document.getElementById('videoPlayPauseBtn');
+      addTrackedListener(videoPlayPauseBtn, 'click', () => {
+        if (!isVideoMode || !videoElement) {
+          triggerShakeAnimation();
+          return;
+        }
+        
+        if (videoElement.paused) {
+          videoElement.play().catch(err => console.error('Play error:', err));
+          videoPlayPauseBtn.innerHTML = '<i class="fas fa-pause"></i> ';
+        } else {
+          videoElement.pause();
+          videoPlayPauseBtn.innerHTML = '<i class="fas fa-play"></i> ';
+        }
+      });
+
+      // Update button state when video is loaded
+      addTrackedListener(videoElement, 'play', () => {
+        videoPlayPauseBtn.innerHTML = '<i class="fas fa-pause"></i> ';
+      });
+
+      addTrackedListener(videoElement, 'pause', () => {
+        videoPlayPauseBtn.innerHTML = '<i class="fas fa-play"></i> ';
+      });
+
+      addTrackedListener(videoElement, 'ended', () => {
+        videoPlayPauseBtn.innerHTML = '<i class="fas fa-play"></i> ';
+      });
+
       // Allow Enter key in URL input
-      document.getElementById('videoUrlInput').addEventListener('keypress', (e) => {
+      addTrackedListener(document.getElementById('videoUrlInput'), 'keypress', (e) => {
         if (e.key === 'Enter') {
           const url = document.getElementById('videoUrlInput').value.trim();
           loadVideoFromUrl(url);
@@ -1155,13 +1039,84 @@
       });
 
       // Random Video button
-      document.getElementById('randomVideoBtn').addEventListener('click', () => {
+      addTrackedListener(document.getElementById('randomVideoBtn'), 'click', () => {
         const randomVideoUrl = dynamicVideos[Math.floor(Math.random() * dynamicVideos.length)];
         loadVideoFromUrl(randomVideoUrl);
       });
 
+      // Load Video button
+      const videoFileInput = document.createElement('input');
+      videoFileInput.type = 'file';
+      videoFileInput.accept = 'video/*';
+      videoFileInput.style.display = 'none';
+      document.body.appendChild(videoFileInput);
+
+      addTrackedListener(document.getElementById('videoUploadBtn'), 'click', (e) => {
+        e.stopPropagation();
+        videoFileInput.click();
+      });
+
+      addTrackedListener(videoFileInput, 'change', function(e) {
+        e.stopPropagation();
+        const file = videoFileInput.files[0];
+        if(file){
+          console.log('Loading video file:', file.name);
+          const reader = new FileReader();
+          
+          reader.onerror = function() {
+            loadingEl.style.display = 'none';
+            alert('Failed to read video file');
+            console.error('FileReader error');
+          };
+          
+          reader.onload = function(readerEvent){
+            loadingEl.style.display = 'flex';
+            console.log('FileReader complete, setting video src');
+            
+            // Clear any previous event handlers
+            videoElement.onloadedmetadata = null;
+            videoElement.onerror = null;
+            
+            videoElement.onloadedmetadata = function() {
+              console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+              // Update video canvas size to match video
+              if (videoCanvas) {
+                videoCanvas.width = videoElement.videoWidth;
+                videoCanvas.height = videoElement.videoHeight;
+                console.log('Canvas resized to:', videoCanvas.width, 'x', videoCanvas.height);
+              }
+              
+              loadingEl.style.display = 'none';
+              initVideoCanvas();
+              isVideoMode = true;
+              
+              // Permanently mute video
+              videoElement.muted = true;
+              videoElement.volume = 0;
+              videoElement.loop = true;
+              
+              console.log('Starting video playback');
+              videoElement.play().catch(err => console.error('Video autoplay prevented:', err));
+              updateVideoFrame();
+            };
+            
+            videoElement.onerror = function(err) {
+              loadingEl.style.display = 'none';
+              console.error('Video error:', err, videoElement.error);
+              alert('Failed to load video file: ' + (videoElement.error ? videoElement.error.message : 'Unknown error'));
+            };
+            
+            videoElement.src = readerEvent.target.result;
+            console.log('Video src set, calling load()');
+            videoElement.load();
+          };
+          
+          reader.readAsDataURL(file);
+        }
+      });
+
       // Drag & drop for videos and images
-      document.addEventListener('dragover', (e) => {
+      addTrackedListener(document, 'dragover', (e) => {
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
           e.stopPropagation();
@@ -1181,7 +1136,7 @@
       // Zoom with wheel
       let lastTouchDist = null;
 
-      canvas.addEventListener('wheel', function(e) {
+      addTrackedListener(canvas, 'wheel', function(e) {
         e.preventDefault();
         const delta = -e.deltaY * 0.001;
         scale *= (1 + delta);
@@ -1193,7 +1148,7 @@
       }, { passive: false });
 
       // Pinch zoom for mobile
-      canvas.addEventListener('touchmove', function(e) {
+      addTrackedListener(canvas, 'touchmove', function(e) {
         if (e.touches.length === 2) {
           e.preventDefault();
           const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -1212,13 +1167,13 @@
         }
       }, { passive: false });
 
-      canvas.addEventListener('touchend', function(e){
+      addTrackedListener(canvas, 'touchend', function(e){
         if(e.touches.length < 2) lastTouchDist = null;
       });
 
       // Long-press for file picker
       let pressTimer;
-      canvas.addEventListener('touchstart', (e) => {
+      addTrackedListener(canvas, 'touchstart', (e) => {
         if(e.touches.length === 1){
           pressTimer = setTimeout(() => {
             bgFileInput.click();
@@ -1226,16 +1181,16 @@
         }
       });
 
-      canvas.addEventListener('touchend', (e) => {
+      addTrackedListener(canvas, 'touchend', (e) => {
         clearTimeout(pressTimer);
       });
 
-      canvas.addEventListener('touchmove', (e) => {
+      addTrackedListener(canvas, 'touchmove', (e) => {
         clearTimeout(pressTimer);
       });
 
       // Single tap -> random image and hide panel
-      canvas.addEventListener('click', (e) => {
+      addTrackedListener(canvas, 'click', (e) => {
         if (!pressTimer && !lastTouchDist && e.target === canvas) {
           startWithRetry();
         }
@@ -1263,8 +1218,14 @@
                 videoCanvas.height = videoElement.videoHeight;
                 loadingEl.style.display = 'none';
                 initVideoCanvas();
-                enableVideoMode();
+                isVideoMode = true;
+                
+                // Permanently mute video
+                videoElement.muted = true;
+                videoElement.volume = 0;
+                
                 videoElement.play().catch(err => console.error('Video autoplay prevented:', err));
+                updateVideoFrame();
               };
               
               videoElement.onerror = function() {
@@ -1308,9 +1269,20 @@
         }
       }
 
-      document.addEventListener('dragover', handleDragOver);
-      document.addEventListener('drop', handleDrop);
-      document.addEventListener('dragleave', handleDragLeave);
+      addTrackedListener(document, 'dragover', handleDragOver);
+      addTrackedListener(document, 'drop', handleDrop);
+      addTrackedListener(document, 'dragleave', handleDragLeave);
+      
+      // Cleanup on page unload
+      addTrackedListener(window, 'unload', () => {
+        cleanupVideoResources();
+        cancelAnimationFrame();
+        cleanupEventListeners();
+        if (raindropFx && typeof raindropFx.stop === 'function') {
+          raindropFx.stop();
+        }
+        raindropFx = null;
+      });
     })();
 
           function requestFullscreen() {
@@ -1328,8 +1300,8 @@
       function enableFullscreenOnMobile() {
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
-          canvas.addEventListener('click', requestFullscreen, { once: true });
-          document.addEventListener('touchstart', requestFullscreen, { once: true });
+          addTrackedListener(canvas, 'click', requestFullscreen, { once: true });
+          addTrackedListener(document, 'touchstart', requestFullscreen, { once: true });
         }
       }
 
