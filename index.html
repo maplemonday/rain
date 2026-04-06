@@ -484,6 +484,10 @@
       const minScale = 0.5;
       const maxScale = 5;
 
+      // กำหนดขนาดให้เล็กกว่าความละเอียดวิดีโอจริง
+      const MAX_VIDEO_WIDTH = 640;   // ลดจาก full width
+      const MAX_VIDEO_HEIGHT = 360;  // ลดจาก full height
+
       // Curated Videos Array
       const curatedVideos = [
         'https://www.shutterstock.com/shutterstock/videos/4018923955/preview/stock-footage-green-landscape-view-of-trees-in-forest.webm',
@@ -883,7 +887,9 @@
         if (!videoCanvas) {
           videoCanvas = document.createElement('canvas');
           videoCanvasCtx = videoCanvas.getContext('2d');
-          // Initial size, will be updated with video dimensions
+          
+          // รอให้วิดีโอโหลด metadata ก่อนแล้วค่อยกำหนดขนาด
+          // แต่ตั้งค่าเริ่มต้นให้เล็ก
           videoCanvas.width = 320;
           videoCanvas.height = 240;
         }
@@ -962,8 +968,23 @@
         videoElement.onloadedmetadata = function() {
           console.log('Video metadata loaded from URL:', videoElement.videoWidth, 'x', videoElement.videoHeight);
           if (videoCanvas) {
-            videoCanvas.width = videoElement.videoWidth;
-            videoCanvas.height = videoElement.videoHeight;
+            // คำนวณขนาดใหม่ให้ไม่เกิน MAX_VIDEO_WIDTH/HEIGHT
+            const maxWidth = MAX_VIDEO_WIDTH;
+            const maxHeight = MAX_VIDEO_HEIGHT;
+            const aspect = videoElement.videoWidth / videoElement.videoHeight;
+            
+            let newWidth = Math.min(videoElement.videoWidth, maxWidth);
+            let newHeight = Math.min(videoElement.videoHeight, maxHeight);
+            
+            // รักษา aspect ratio
+            if (newWidth / newHeight > aspect) {
+              newWidth = newHeight * aspect;
+            } else {
+              newHeight = newWidth / aspect;
+            }
+            
+            videoCanvas.width = Math.floor(newWidth);
+            videoCanvas.height = Math.floor(newHeight);
             console.log('Canvas resized to:', videoCanvas.width, 'x', videoCanvas.height);
           }
           loadingEl.style.display = 'none';
@@ -1081,8 +1102,23 @@
               console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
               // Update video canvas size to match video
               if (videoCanvas) {
-                videoCanvas.width = videoElement.videoWidth;
-                videoCanvas.height = videoElement.videoHeight;
+                // คำนวณขนาดใหม่ให้ไม่เกิน MAX_VIDEO_WIDTH/HEIGHT
+                const maxWidth = MAX_VIDEO_WIDTH;
+                const maxHeight = MAX_VIDEO_HEIGHT;
+                const aspect = videoElement.videoWidth / videoElement.videoHeight;
+                
+                let newWidth = Math.min(videoElement.videoWidth, maxWidth);
+                let newHeight = Math.min(videoElement.videoHeight, maxHeight);
+                
+                // รักษา aspect ratio
+                if (newWidth / newHeight > aspect) {
+                  newWidth = newHeight * aspect;
+                } else {
+                  newHeight = newWidth / aspect;
+                }
+                
+                videoCanvas.width = Math.floor(newWidth);
+                videoCanvas.height = Math.floor(newHeight);
                 console.log('Canvas resized to:', videoCanvas.width, 'x', videoCanvas.height);
               }
               
@@ -1214,8 +1250,23 @@
               loadingEl.style.display = 'flex';
               
               videoElement.onloadedmetadata = function() {
-                videoCanvas.width = videoElement.videoWidth;
-                videoCanvas.height = videoElement.videoHeight;
+                // คำนวณขนาดใหม่ให้ไม่เกิน MAX_VIDEO_WIDTH/HEIGHT
+                const maxWidth = MAX_VIDEO_WIDTH;
+                const maxHeight = MAX_VIDEO_HEIGHT;
+                const aspect = videoElement.videoWidth / videoElement.videoHeight;
+                
+                let newWidth = Math.min(videoElement.videoWidth, maxWidth);
+                let newHeight = Math.min(videoElement.videoHeight, maxHeight);
+                
+                // รักษา aspect ratio
+                if (newWidth / newHeight > aspect) {
+                  newWidth = newHeight * aspect;
+                } else {
+                  newHeight = newWidth / aspect;
+                }
+                
+                videoCanvas.width = Math.floor(newWidth);
+                videoCanvas.height = Math.floor(newHeight);
                 loadingEl.style.display = 'none';
                 initVideoCanvas();
                 isVideoMode = true;
