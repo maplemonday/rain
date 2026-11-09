@@ -5,8 +5,8 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rain</title>
-  <link rel="preconnect" href="https://picsum.photos">
-  <link rel="preconnect" href="https://fastly.picsum.photos" crossorigin>
+  <link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>
+  <link rel="preconnect" href="https://commons.wikimedia.org" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <!-- icons: non-blocking, so first paint/rain does not wait for the CSS+font download -->
   <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -448,7 +448,6 @@
    * CONFIG
    * ==================================================================== */
   const CONFIG = {
-    IMAGE_SIZE: 300,              // random image size (unchanged)
     MAX_IMAGE_SIDE: 2560,         // user-supplied images larger than this are down-scaled once
     MAX_VIDEO_W: 640,             // video texture size cap (unchanged)
     MAX_VIDEO_H: 360,
@@ -456,7 +455,7 @@
     MAX_VIDEO_FPS: 30,            // max background-texture updates per second
     IMAGE_TIMEOUT: 10000,
     VIDEO_TIMEOUT: 12000,
-    MAX_ATTEMPTS: 5,              // random image / random video: tries before giving up
+    MAX_ATTEMPTS: 8,              // random image / random video: tries before giving up
     AUTO_NEXT_MS: 45000,          // "Auto Next Video" interval
     HISTORY_SIZE: 30,             // do not repeat the last N videos
     POOL_MAX: 400,
@@ -464,12 +463,24 @@
     // Optional: free key from https://www.pexels.com/api/  (or localStorage.setItem('pexelsKey', '...'))
     PEXELS_API_KEY: '',
     // Keyless online source (Wikimedia Commons). One random term is used per refill.
+    // Themed for "rain on a window": calm scenery / city / nature, fixed camera, no people
     COMMONS_QUERIES: [
-      'rain', 'rainfall', 'raindrops', 'thunderstorm', 'storm clouds', 'forest', 'waterfall',
-      'river', 'ocean waves', 'lake', 'mountains', 'sunset', 'clouds timelapse', 'fog',
-      'snowfall', 'aurora', 'night city', 'rainforest', 'bamboo', 'garden'
+      'rainy street', 'rain window', 'rainforest', 'misty forest', 'bamboo forest', 'forest stream',
+      'waterfall', 'lake view', 'mountain landscape', 'foggy mountains', 'city night skyline',
+      'city lights night', 'harbor night', 'garden', 'cloudy sky', 'sunset sky', 'snowy forest', 'autumn forest'
     ],
-    PEXELS_QUERIES: ['rain', 'rain window', 'forest rain', 'storm', 'nature', 'clouds', 'ocean', 'waterfall', 'night city']
+    IMAGE_QUERIES: [
+      'rainy street', 'misty forest', 'rainforest', 'bamboo forest', 'lake mist', 'mountain landscape',
+      'foggy mountains', 'city night skyline', 'city lights night', 'harbor night', 'garden pond',
+      'cloudy sky', 'sunset sky', 'snowy forest', 'autumn forest', 'waterfall', 'rice field', 'temple garden'
+    ],
+    // words that usually mean camera movement or people -> excluded from the search
+    EXCLUDE_VIDEO: '-drone -aerial -pan -panning -hyperlapse -driving -flight -walk -walking -tour -timelapse -portrait -interview',
+    EXCLUDE_IMAGE: '-portrait -people -person -man -woman -selfie -crowd -aerial',
+    // static-camera check (mean luma change 0..255 between samples ~0.35s apart on a 32x18 frame)
+    STATIC_MAX_MEAN_DIFF: 6,
+    STATIC_SAMPLES: 4,
+    PEXELS_QUERIES: ['rain window', 'rainy street', 'forest rain', 'bamboo rain', 'lake', 'mountain fog', 'city night', 'cloudy sky']
   };
 
   const CURATED_VIDEOS = [
@@ -602,8 +613,6 @@
   /* ======================================================================
    * IMAGES
    * ==================================================================== */
-  const randomImageUrl = () => `https://picsum.photos/${CONFIG.IMAGE_SIZE}/${CONFIG.IMAGE_SIZE}?random=${Math.random()}`;
-
   function loadImage(url, timeoutMs = CONFIG.IMAGE_TIMEOUT) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -647,11 +656,70 @@
     } finally { dispose(); }
   }
 
-  // Next random image is downloaded in the background => tap/click feels instant
+  /* ---------- themed image pool (Wikimedia Commons, no key, CORS ok) ---------- */
+  const imagePool = new Set(), badImages = new Set(), imageHistory = [];
+  let imageRefilling = null;
+
+  async function fetchCommonsImages() {
+    const term = pickRandom(CONFIG.IMAGE_QUERIES);
+    const query = async (extra, offset) => {
+      const qs = new URLSearchParams({
+        action: 'query', format: 'json', formatversion: '2', origin: '*',
+        generator: 'search', gsrsearch: `${term} filetype:bitmap ${CONFIG.EXCLUDE_IMAGE} ${extra}`.trim(),
+        gsrnamespace: '6', gsrlimit: '40', gsroffset: String(offset),
+        prop: 'imageinfo', iiprop: 'url|size|mime', iiurlwidth: '800'
+      });
+      const res = await fetch('https://commons.wikimedia.org/w/api.php?' + qs, { signal: timeoutSignal(8000) });
+      if (!res.ok) throw new Error('Commons HTTP ' + res.status);
+      const json = await res.json();
+      return (json.query && json.query.pages) || [];
+    };
+    let pages = await query('incategory:"Quality images"', Math.floor(Math.random() * 60));
+    if (!pages.length) pages = await query('', Math.floor(Math.random() * 60));
+    if (!pages.length) pages = await query('', 0);
+    const urls = [];
+    for (const p of pages) {
+      const i = (p.imageinfo || [])[0];
+      // landscape JPEGs only (fills the screen with "cover"); thumbnail keeps the download small
+      if (i && i.mime === 'image/jpeg' && i.width >= 1200 && i.width >= i.height * 1.2 && (i.thumburl || i.url)) urls.push(i.thumburl || i.url);
+    }
+    return urls;
+  }
+
+  function refillImages() {
+    if (imageRefilling) return imageRefilling;
+    imageRefilling = fetchCommonsImages()
+      .then((u) => { u.forEach((x) => { if (!badImages.has(x)) imagePool.add(x); }); })
+      .catch((e) => console.warn('Image source failed:', e.message || e))
+      .finally(() => { imageRefilling = null; });
+    return imageRefilling;
+  }
+
+  async function nextImageUrl() {
+    const pick = () => {
+      const alive = [...imagePool].filter((u) => !badImages.has(u));
+      const fresh = alive.filter((u) => !imageHistory.includes(u));
+      if (fresh.length < 5) refillImages();                       // top up in background
+      const list = fresh.length ? fresh : alive;
+      return list.length ? pickRandom(list) : null;
+    };
+    let url = pick();
+    if (!url) { await refillImages(); url = pick(); }
+    if (url) { imageHistory.push(url); while (imageHistory.length > CONFIG.HISTORY_SIZE) imageHistory.shift(); imagePool.delete(url); }
+    return url;
+  }
+
+  async function loadThemedImage() {
+    const url = await nextImageUrl();
+    if (!url) throw new Error('No image source available');
+    try { return await loadImage(url); } catch (e) { badImages.add(url); throw e; }
+  }
+
+  // Next themed image is downloaded in the background => tap/click feels instant
   let prefetched = null;
   function prefetchImage() {
     if (prefetched || slowNetwork()) return;
-    const p = loadImage(randomImageUrl());
+    const p = loadThemedImage();
     prefetched = p;
     p.catch(() => { if (prefetched === p) prefetched = null; });
   }
@@ -695,7 +763,7 @@
   }
 
   const showRandomImage = () =>
-    showImage(async () => (await takePrefetchedImage()) || loadImage(randomImageUrl()), { attempts: CONFIG.MAX_ATTEMPTS });
+    showImage(async () => (await takePrefetchedImage()) || loadThemedImage(), { attempts: CONFIG.MAX_ATTEMPTS });
 
   async function showImageFile(file) {
     const url = URL.createObjectURL(file);       // no base64 (FileReader) round-trip
@@ -899,6 +967,12 @@
     if (token !== reqToken) return 'stale';
     try { await slot.el.play(); } catch (err) { console.warn('play() was blocked:', err && err.message); }
     if (token !== reqToken) return 'stale';
+    if (opts.random && !(await isStaticShot(slot.el))) {          // moving camera -> skip this clip
+      console.warn('Skipping clip with camera movement:', url);
+      resetSlot(slot);
+      return token !== reqToken ? 'stale' : 'fail';
+    }
+    if (token !== reqToken) return 'stale';
     await activate(slot, !!opts.random);
     return 'ok';
   }
@@ -971,7 +1045,7 @@
     const query = async (offset) => {
       const qs = new URLSearchParams({
         action: 'query', format: 'json', formatversion: '2', origin: '*',
-        generator: 'search', gsrsearch: `${term} filetype:video`, gsrnamespace: '6',
+        generator: 'search', gsrsearch: `${term} filetype:video ${CONFIG.EXCLUDE_VIDEO}`, gsrnamespace: '6',
         gsrlimit: '30', gsroffset: String(offset),
         prop: 'videoinfo', viprop: 'url|size|mediatype|mime|derivatives'
       });
@@ -1033,6 +1107,33 @@
     if (fresh.length < 3 && Date.now() - lastRefill > 10000) refillPool();     // top up in background
     const list = fresh.length ? fresh : alive;
     return list.length ? pickRandom(list) : null;
+  }
+
+  // Static-camera check: sample 32x18 luma frames ~0.35s apart; panning/zooming/shaky shots change almost
+  // every pixel, a fixed camera (rain, leaves, waves, small movers) changes little.
+  async function isStaticShot(el) {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 18;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    const grab = () => {
+      g.drawImage(el, 0, 0, 32, 18);
+      const d = g.getImageData(0, 0, 32, 18).data, out = new Float32Array(576);
+      for (let i = 0; i < 576; i++) out[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+      return out;
+    };
+    try {
+      let prev = grab(), sum = 0, n = 0;
+      for (let k = 1; k < CONFIG.STATIC_SAMPLES; k++) {
+        await sleep(350);
+        const cur = grab();
+        let t = 0;
+        for (let i = 0; i < 576; i++) t += Math.abs(cur[i] - prev[i]);
+        sum += t / 576; n++; prev = cur;
+      }
+      const mean = sum / n;
+      isStaticShot.last = mean;
+      return mean <= CONFIG.STATIC_MAX_MEAN_DIFF;
+    } catch (_) { return true; }                // cannot read pixels -> do not block
   }
 
   function preloadNextVideo() {                  // next random clip buffers in the standby <video>
@@ -1298,7 +1399,7 @@
    * ==================================================================== */
   window.RainApp = {                                   // handy for debugging in the console
     get fx() { return fx; }, get mode() { return mode; },
-    randomVideo, showRandomImage, openVideo, refillPool, pool, badVideos
+    randomVideo, showRandomImage, openVideo, refillPool, isStaticShot, pool, badVideos, imagePool
   };
 
   (async () => {
